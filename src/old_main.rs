@@ -1,9 +1,9 @@
 use crate::{cdc::CDC0, rtc, tick, timer};
 
-use adafruit_nrf52_bluefruit_le::{prelude::*, Board};
+use adafruit_nrf52_bluefruit_le::Board;
 use core::fmt::Write;
 use core::ops::DerefMut;
-use nrf52832_hal::Temp;
+use nrf52832_hal::{Clocks, Rtc, Temp, Timer};
 
 pub fn setup(mut b: Board) {
     let mut cdc = b.cdc;
@@ -23,13 +23,13 @@ pub fn setup(mut b: Board) {
 
     // timer 27?
     timer::start(
-        b.TIMER4.constrain(),
+        Timer::new(b.TIMER4),
         &mut b.NVIC,
         b.leds.red,
         Temp::new(b.TEMP),
     );
 
-    rtc::start(b.RTC1.constrain(), b.CLOCK.constrain(), &mut b.NVIC);
+    rtc::start(Rtc::new(b.RTC1), Clocks::new(b.CLOCK), &mut b.NVIC);
 
     cortex_m::interrupt::free(move |cs| {
         if let Some(ref mut cdc) = CDC0.0.borrow(cs).borrow_mut().deref_mut() {

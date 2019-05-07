@@ -8,8 +8,7 @@ use cortex_m::interrupt::Mutex;
 use embedded_hal::timer::Cancel;
 use nrf52832_hal::{
     target::{interrupt, NVIC, TIMER4},
-    uarte::UarteExt,
-    Temp, Timer, Uarte,
+    uarte, Temp, Timer, Uarte,
 };
 
 static LED: Mutex<RefCell<Option<Led>>> = Mutex::new(RefCell::new(None));
@@ -34,13 +33,13 @@ pub fn start(timer: Timer<TIMER4>, mut nvic: &mut NVIC, led: Led, temp: Temp) {
 
 fn log_temp<T>(_temp: &mut Temp, _cdc: &mut Uarte<T>)
 where
-    T: UarteExt,
+    T: uarte::Instance,
 {
 }
 
 fn toggle_red<T>(led: &mut Led, _cdc: &mut Uarte<T>)
 where
-    T: UarteExt,
+    T: uarte::Instance,
 {
     static mut ON: bool = false;
     let on = unsafe { &mut ON };
