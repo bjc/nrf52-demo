@@ -1,14 +1,13 @@
-use crate::cdc::CDC0;
+use crate::log;
 
 use adafruit_nrf52_bluefruit_le::{prelude::*, Led};
 use core::cell::RefCell;
-use core::fmt::Write;
 use core::ops::DerefMut;
 use cortex_m::interrupt::Mutex;
 use embedded_hal::timer::Cancel;
 use nrf52832_hal::{
     target::{interrupt, NVIC, TIMER4},
-    uarte, Temp, Timer, Uarte,
+    Temp, Timer,
 };
 
 static LED: Mutex<RefCell<Option<Led>>> = Mutex::new(RefCell::new(None));
@@ -16,10 +15,8 @@ static TIMER: Mutex<RefCell<Option<Timer<TIMER4>>>> = Mutex::new(RefCell::new(No
 static TEMP: Mutex<RefCell<Option<Temp>>> = Mutex::new(RefCell::new(None));
 
 pub fn start(timer: Timer<TIMER4>, mut nvic: &mut NVIC, led: Led, temp: Temp) {
-    cortex_m::interrupt::free(move |cs| {
-        if let Some(ref mut cdc) = CDC0.0.borrow(cs).borrow_mut().deref_mut() {
-            write!(cdc, "Starting TIMER4.\r\n").unwrap();
-        }
+    log!("Starting TIMER4.");
+    cortex_m::interrupt::free(|cs| {
         *LED.borrow(cs).borrow_mut() = Some(led);
         *TIMER.borrow(cs).borrow_mut() = Some(timer);
         *TEMP.borrow(cs).borrow_mut() = Some(temp);
@@ -31,16 +28,9 @@ pub fn start(timer: Timer<TIMER4>, mut nvic: &mut NVIC, led: Led, temp: Temp) {
     });
 }
 
-fn log_temp<T>(_temp: &mut Temp, _cdc: &mut Uarte<T>)
-where
-    T: uarte::Instance,
-{
-}
+fn log_temp(_temp: &mut Temp) {}
 
-fn toggle_red<T>(led: &mut Led, _cdc: &mut Uarte<T>)
-where
-    T: uarte::Instance,
-{
+fn toggle_red(led: &mut Led) {
     static mut ON: bool = false;
     let on = unsafe { &mut ON };
 
@@ -55,13 +45,12 @@ where
 #[interrupt]
 fn TIMER4() {
     cortex_m::interrupt::free(|cs| {
-        if let (Some(ref mut led), Some(ref mut cdc), Some(ref mut temp)) = (
+        if let (Some(ref mut led), Some(ref mut temp)) = (
             LED.borrow(cs).borrow_mut().deref_mut(),
-            CDC0.0.borrow(cs).borrow_mut().deref_mut(),
             TEMP.borrow(cs).borrow_mut().deref_mut(),
         ) {
-            log_temp(temp, cdc);
-            toggle_red(led, cdc);
+            log_temp(temp);
+            toggle_red(led);
         }
 
         // TODO: shouldn't be bit twiddling here, but the HAL doesn't have

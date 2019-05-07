@@ -16,5 +16,5 @@ unsafe fn HardFault(ef: &ExceptionFrame) -> ! {
 #[exception]
 fn DefaultHandler(n: i16) {
     let mut b = unsafe { Board::steal() };
-    write!(b.cdc, "in default handler: {}.\r\n", n).unwrap();
+    log!("in default handler: {}", n);
 }
