@@ -11,6 +11,7 @@ nb = "~0.1"
 adafruit-nrf52-bluefruit-le = { path = "../nrf52-hal/boards/adafruit-nrf52-bluefruit-le" }
 nrf52832-hal = { path = "../nrf52-hal/nrf52832-hal" }
 embedded-hal = { path = "../embedded-hal" }
+clint = { path = "../clint" }
 
 [dependencies.cortex-m]
 version = "0.5.8"

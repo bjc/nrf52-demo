@@ -11,9 +11,14 @@ mod timer;
 use panic_abort;
 
 use adafruit_nrf52_bluefruit_le::Board;
+use clint::Handler;
 use cortex_m::asm;
-use cortex_m_rt::entry;
-use nrf52832_hal::{Clocks, Rtc, Temp, Timer};
+use cortex_m_rt::{entry, exception};
+use nrf52832_hal::{target::interrupt, Clocks, Rtc, Temp, Timer};
+
+static mut SYSTICK_HANDLER: Handler = Handler::new();
+static mut TIMER_HANDLER: Handler = Handler::new();
+static mut RTC_HANDLER: Handler = Handler::new();
 
 #[entry]
 fn main() -> ! {
@@ -26,17 +31,23 @@ fn main() -> ! {
     b.leds.blue.disable();
 
     // systick -1?
-    systick::start(&mut b.SYST, b.leds.blue);
+    let mut systick_handler = systick::start(&mut b.SYST, b.leds.blue);
 
     // timer 27?
-    timer::start(
+    let mut timer_handler = timer::start(
         Timer::new(b.TIMER4),
         &mut b.NVIC,
         b.leds.red,
         Temp::new(b.TEMP),
     );
 
-    rtc::start(Rtc::new(b.RTC1), Clocks::new(b.CLOCK), &mut b.NVIC);
+    let mut rtc_handler = rtc::start(Rtc::new(b.RTC1), Clocks::new(b.CLOCK), &mut b.NVIC);
+
+    cortex_m::interrupt::free(|_cs| {
+        unsafe { SYSTICK_HANDLER.replace(&mut systick_handler) };
+        unsafe { TIMER_HANDLER.replace(&mut timer_handler) };
+        unsafe { RTC_HANDLER.replace(&mut rtc_handler) };
+    });
 
     log!("Going into busy loop.");
     loop {
@@ -50,4 +61,19 @@ fn main() -> ! {
     // loop. This should be cleaner, since it would allow you to do
     // clean up. But it would also require putting the original
     // handlers back on drop.
+}
+
+#[exception]
+fn SysTick() {
+    unsafe { SYSTICK_HANDLER.call() }
+}
+
+#[interrupt]
+fn RTC1() {
+    unsafe { RTC_HANDLER.call() }
+}
+
+#[interrupt]
+fn TIMER4() {
+    unsafe { TIMER_HANDLER.call() }
 }
