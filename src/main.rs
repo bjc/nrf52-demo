@@ -11,14 +11,12 @@ mod timer;
 use panic_abort;
 
 use adafruit_nrf52_bluefruit_le::Board;
-use clint::Handler;
+use clint::HandlerArray;
 use cortex_m::asm;
 use cortex_m_rt::{entry, exception};
 use nrf52832_hal::{target::interrupt, Clocks, Rtc, Temp, Timer};
 
-static mut SYSTICK_HANDLER: Handler = Handler::new();
-static mut TIMER_HANDLER: Handler = Handler::new();
-static mut RTC_HANDLER: Handler = Handler::new();
+static HANDLERS: HandlerArray = HandlerArray::new();
 
 #[entry]
 fn main() -> ! {
@@ -30,10 +28,10 @@ fn main() -> ! {
     b.leds.red.disable();
     b.leds.blue.disable();
 
-    // systick -1?
     let mut systick_handler = systick::start(&mut b.SYST, b.leds.blue);
 
-    // timer 27?
+    let mut rtc_handler = rtc::start(Rtc::new(b.RTC1), Clocks::new(b.CLOCK), &mut b.NVIC);
+
     let mut timer_handler = timer::start(
         Timer::new(b.TIMER4),
         &mut b.NVIC,
@@ -41,39 +39,33 @@ fn main() -> ! {
         Temp::new(b.TEMP),
     );
 
-    let mut rtc_handler = rtc::start(Rtc::new(b.RTC1), Clocks::new(b.CLOCK), &mut b.NVIC);
+    HANDLERS.with_overrides(|hs| {
+        hs.register(0, &mut systick_handler);
+        hs.register(1, &mut rtc_handler);
+        hs.register(2, &mut timer_handler);
 
-    cortex_m::interrupt::free(|_cs| {
-        unsafe { SYSTICK_HANDLER.replace(&mut systick_handler) };
-        unsafe { TIMER_HANDLER.replace(&mut timer_handler) };
-        unsafe { RTC_HANDLER.replace(&mut rtc_handler) };
+        log!("Going into busy loop.");
+        loop {
+            // SysTick runs very, very slowly during wfi, to enable low
+            // power states. It will fire, but it's not frequent.
+            asm::wfi();
+        }
     });
 
-    log!("Going into busy loop.");
-    loop {
-        // SysTick runs very, very slowly during wfi, to enable low
-        // power states. It will fire, but it's not frequent.
-        asm::wfi();
-    }
-
-    // TODO: may be able to get rid of static lifetime stuff by adding
-    // an equivalent to thread::join here, after the non-terminating
-    // loop. This should be cleaner, since it would allow you to do
-    // clean up. But it would also require putting the original
-    // handlers back on drop.
+    unreachable!();
 }
 
 #[exception]
 fn SysTick() {
-    unsafe { SYSTICK_HANDLER.call() }
+    HANDLERS.call(0);
 }
 
 #[interrupt]
 fn RTC1() {
-    unsafe { RTC_HANDLER.call() }
+    HANDLERS.call(1);
 }
 
 #[interrupt]
 fn TIMER4() {
-    unsafe { TIMER_HANDLER.call() }
+    HANDLERS.call(2);
 }
